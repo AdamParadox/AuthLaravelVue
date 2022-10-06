@@ -1,1 +1,177 @@
 Файл .env создать самому
+/**/ --- код обёрнутый в эти комментарии написан с нуля
+Файлы который используются для реализации авторизации/регистрации/выхода из системы:
+-- api.php
+-- AuthConrtoller.php
+-- AppServiceProvider.php
+-- .env
+1.Создать проект --- composer create-project laravel/laravel laravel-vue
+2.Запуск сервера --- php artisan serve
+3.Создать базу данных
+4.В файле .env прописать название базы данных
+5.В файле .editorconfig написать:
+
+[*.{js,css,less,scss,vue}]
+indent_size = 2
+6.Делаем миграцию данных таблиц в базу данных --- php artisan migrate 
+(Если при миграции возникла ошибка -SQLSTATE[42000]: Syntax error or access violation: 1071 Specified key was too long; max key length is 1000 bytes (SQL: alter table `users` add unique `users_email_unique`(`email`))-,
+то заходим в app->providers->appserviceprovider и добавляем:
+-use Illuminate\Database\Schema\Builder;
+-Builder::defaultStringLength(191);
+таким образом:
+
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Database\Schema\Builder;
+use Illuminate\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * Register any application services.
+     *
+     * @return void
+     */
+    public function register()
+    {
+        //
+    }
+
+    /**
+     * Bootstrap any application services.
+     *
+     * @return void
+     */
+    public function boot()
+    {
+        Builder::defaultStringLength(191);
+    }
+}
+
+7.Создаём контроллер для регистрации/входа/выхода из аккаунта 
+AuthController.php в app->Http->Controllers:
+
+<?php
+
+
+namespace App\Http\Controllers;
+
+
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Testing\Fluent\Concerns\Has;
+use Illuminate\Validation\Rules\Password;
+
+/**
+ * Class AuthController
+ *
+ * @author  Zura Sekhniashvili <zurasekhniashvili@gmail.com>
+ * @package App\Http\Controllers
+ */
+class AuthController extends Controller
+{
+    public function register(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string',
+            'email' => 'required|email|string|unique:users,email',
+            'password' => [
+                'required',
+                'confirmed',
+                Password::min(8)->mixedCase()->numbers()->symbols()
+            ]
+        ]);
+
+        /** @var \App\Models\User $user */
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => bcrypt($data['password'])
+        ]);
+        $token = $user->createToken('main')->plainTextToken;
+
+        return response([
+            'user' => $user,
+            'token' => $token
+        ]);
+    }
+
+    public function login(Request $request)
+    {
+        $credentials = $request->validate([
+            'email' => 'required|email|string|exists:users,email',
+            'password' => [
+                'required',
+            ],
+            'remember' => 'boolean'
+        ]);
+        $remember = $credentials['remember'] ?? false;
+        unset($credentials['remember']);
+
+        if (!Auth::attempt($credentials, $remember)) {
+            return response([
+                'error' => 'The Provided credentials are not correct'
+            ], 422);
+        }
+        $user = Auth::user();
+        $token = $user->createToken('main')->plainTextToken;
+
+        return response([
+            'user' => $user,
+            'token' => $token
+        ]);
+    }
+
+    public function logout()
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        // Revoke the token that was used to authenticate the current request...
+        $user->currentAccessToken()->delete();
+
+        return response([
+            'success' => true
+        ]);
+    }
+
+}
+8.Создадим роуты для регистрации в routes->api.php:
+
+<?php
+
+/**/
+use App\Http\Controllers\AuthController;
+/**/
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+
+/**/
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+});
+/**/
+
+
+/**/
+Route::post('/register', [AuthController::class, 'register']);
+/**/
+
+/**/
+Route::post('/login', [AuthController::class, 'login']);
+/**/
+
+9.Остальное во Vue
+10.В терминале проекта добавить vue --- npm init vite vue
+11.В терминале папки vue скачать зависимости --- npm i
+12.Добавить vuex и т.д дурак что-ли? сам же знаешь
+
+
+
